@@ -3,7 +3,7 @@
 This document gives a high-level view of the core classes in BasePackage.
 It focuses on the shared agent foundation and orchestration layers only.
 
-It intentionally excludes consumer implementations such as IRRAgent and IRRAgentLanggraph.
+It intentionally excludes domain-specific consumer implementations so the focus stays on the reusable package foundation.
 
 ## Class Diagram
 

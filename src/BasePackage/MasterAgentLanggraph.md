@@ -87,15 +87,17 @@ Conditional transitions:
 
 ## Streaming Endpoint Behavior
 
-MasterAgentLanggraph does not define HTTP routes directly. It relies on OrchestratorMixin.create_api_router(), which currently exposes:
+MasterAgentLanggraph does not define HTTP routes directly. It relies on OrchestratorMixin.create_api_router(), which exposes:
 
 - POST /run
 - POST /stream
 - GET /health (optional)
 
-For this repository's graph incident API (prefix /api/irragentlanggraph), the stream endpoint is:
+When a concrete orchestrator creates an API app with a custom prefix, the stream endpoint follows that prefix. For example, with `create_api_app(prefix="/api/mastergraph")`, the route is:
 
-- POST /api/irragentlanggraph/stream
+- POST /api/mastergraph/stream
+
+The exact endpoint name is determined by the app wrapper, not by a fixed repository-specific route.
 
 The request body is OrchestratorAPIRequest with these fields:
 
@@ -204,7 +206,7 @@ MasterAgentLanggraph __init__ initializes the required shared state expected by 
 
 - Shared routing/planning/evaluation logic is not implemented here anymore; it is inherited from OrchestratorMixin.
 - execute node currently runs planned children in sequence.
-- setup_child_agents remains abstract at mixin level; domain-specific subclasses (for example IRRAgentLanggraph) should implement it.
+- setup_child_agents remains abstract at mixin level; domain-specific subclasses should implement it.
 
 ---
 

@@ -406,12 +406,30 @@ Notes for frontend consumers:
 - routing_mode and enable_react_evaluation can be overridden per request.
 - For graph-based orchestrators, additional progress events may be emitted before final.
 
-### Existing concrete reference in this repo
+### Concrete wrapper pattern
 
-- IncResolverAgent/IRRAgentApi.py shows a working wrapper for IRRAgent.
-- It exposes POST /api/irr/run, POST /api/irr/stream, and GET /api/irr/health.
-- IncResolverAgent/IRRAgentLanggraphApi.py shows the graph-based wrapper.
-- It exposes POST /api/irragentlanggraph/run, POST /api/irragentlanggraph/stream, and GET /api/irragentlanggraph/health.
+Any concrete orchestrator can expose the shared API surface by creating a custom app wrapper with `create_api_app()`. The endpoint prefix is chosen by the concrete app, while the request/response contract remains the same across orchestrators.
+
+Example:
+
+```python
+config = AgentConfig(name="demo-orchestrator", description="Demo API")
+agent = MyOrchestrator(config)
+
+app = agent.create_api_app(
+    title="Demo Orchestrator API",
+    prefix="/api/demo",
+    tags=["DemoOrchestrator"],
+)
+```
+
+This yields standard routes such as:
+
+- POST /api/demo/run
+- POST /api/demo/stream
+- GET /api/demo/health
+
+The important part is the wrapper pattern, not a repo-specific URL.
 
 ---
 

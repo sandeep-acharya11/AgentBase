@@ -6,10 +6,9 @@ You can toggle ReAct-style evaluation on/off using the `enable_react_evaluation`
 
 This property is implemented in `OrchestratorMixin`, so it is available across orchestrators that inherit from it, including:
 
-- MasterAgent (sequential)
-- MasterAgentLanggraph (graph-based)
-- IRRAgent
-- IRRAgentLanggraph
+- `MasterAgent` (sequential)
+- `MasterAgentLanggraph` (graph-based)
+- any custom orchestrator built on `OrchestratorMixin` + `BaseAgent`
 
 **Default**: `True` (ReAct evaluation enabled)
 
@@ -21,49 +20,52 @@ This property is implemented in `OrchestratorMixin`, so it is available across o
 
 ```python
 from BasePackage.AgentConfig import AgentConfig
-from IncResolverAgent import IRRAgent
+from BasePackage.MasterAgent import MasterAgent
 
-irr_agent = IRRAgent(AgentConfig(name="test"))
-irr_agent.setup_child_agents()
-irr_agent.initialize()
 
-# ReAct is enabled by default
-response = irr_agent.run("incident description")
+class DemoWorkerAgent(BaseAgent):
+    def build_tools(self):
+        return []
 
-# Access evaluation results
+    def build_system_prompt(self) -> str:
+        return "You are a helpful worker agent."
+
+
+class DemoOrchestrator(MasterAgent):
+    def setup_child_agents(self) -> None:
+        self.add_child(
+            "worker",
+            DemoWorkerAgent(AgentConfig(name="worker", description="Worker agent")),
+            keywords=["task", "analyze", "plan"],
+            set_default=True,
+        )
+
+
+agent = DemoOrchestrator(AgentConfig(name="demo-orchestrator"))
+agent.setup_child_agents()
+agent.initialize()
+
+response = agent.run("Analyze this request and propose a plan")
 react_eval = response.metadata["orchestration"]["react_evaluation"]
-print(f"Quality: {react_eval['child_evaluations']['1.analyzer']['quality_score']}")
+print(react_eval["final_evaluation"]["quality_score"])
 ```
 
 ### Disable ReAct Evaluation
 
 ```python
-from BasePackage.AgentConfig import AgentConfig
-from IncResolverAgent import IRRAgent
-
-irr_agent = IRRAgent(AgentConfig(name="test"))
-irr_agent.setup_child_agents()
-
-# Disable ReAct evaluation for faster execution
-irr_agent.enable_react_evaluation = False
-
-irr_agent.initialize()
-response = irr_agent.run("incident description")
-
-# react_evaluation will be None
+agent.enable_react_evaluation = False
+response = agent.run("Summarize the issue in three bullet points")
 print(response.metadata["orchestration"]["react_evaluation"])  # None
 ```
 
 ### Dynamic Toggle
 
 ```python
-# Start with ReAct disabled for quick response
-irr_agent.enable_react_evaluation = False
-response1 = irr_agent.run("quick incident")
+agent.enable_react_evaluation = False
+quick_response = agent.run("Quick triage request")
 
-# Switch to ReAct enabled for quality assurance
-irr_agent.enable_react_evaluation = True
-response2 = irr_agent.run("critical incident")
+agent.enable_react_evaluation = True
+quality_response = agent.run("Critical review request")
 ```
 
 ---
@@ -73,56 +75,47 @@ response2 = irr_agent.run("critical incident")
 ### With ReAct Evaluation Enabled (`True`)
 
 ✅ **Pros:**
-- Automatic quality assessment on each child response
-- Iterative refinement up to 2 iterations per agent
-- Quality scores on 4 criteria (completeness, clarity, relevance, coherence)
-- Final composite response evaluation
-- Detailed metadata for transparency
+- Quality assessment on each child response
+- Optional refinement loop up to the configured iteration limit
+- Final-response evaluation metadata
+- Better transparency for complex orchestration runs
 
 ❌ **Cons:**
-- More LLM API calls (depends on number of children and refinement loops)
-- Slower execution (15-60 seconds depending on refinements)
-- Higher costs
+- Additional model calls
+- Higher latency and cost
 
 **Execution Flow:**
 ```
 Execute Child 1
   ↓ Evaluate
-  ↓ If quality < 0.75: Refine & Re-evaluate
+  ↓ If quality below threshold: refine and re-evaluate
 Collect Output
 
 Execute Child 2
   ↓ Evaluate
-  ↓ If quality < 0.75: Refine & Re-evaluate
+  ↓ If quality below threshold: refine and re-evaluate
 Collect Output
 
-[...more children...]
-
-Final Evaluation
+Final evaluation
 ```
 
 ### With ReAct Evaluation Disabled (`False`)
 
 ✅ **Pros:**
 - Single-pass execution
-- Fewer LLM API calls than ReAct-enabled runs
-- Fast execution (5-15 seconds)
-- Lower costs
+- Fewer model calls
+- Faster turnaround and lower cost
 
 ❌ **Cons:**
-- No quality assurance
+- No child quality scoring
 - No iterative refinement
-- No evaluation metadata
-- May accept lower-quality responses
+- Less telemetry in the orchestration metadata
 
 **Execution Flow:**
 ```
 Execute Child 1 → Collect Output
 Execute Child 2 → Collect Output
-Execute Child 3 → Collect Output
-Execute Child 4 → Collect Output
-
-Compose Response
+Compose final response
 ```
 
 ---
@@ -134,7 +127,7 @@ Compose Response
 ```python
 response.metadata["orchestration"]["react_evaluation"] = {
     "child_evaluations": {
-        "1.analyzer": {
+        "1.worker": {
             "quality_score": 0.82,
             "needs_refinement": False,
             "feedback": "...",
@@ -142,22 +135,18 @@ response.metadata["orchestration"]["react_evaluation"] = {
                 "completeness": 0.85,
                 "clarity": 0.80,
                 "relevance": 0.82,
-                "coherence": 0.80
-            }
-        },
-        # ... more children
+                "coherence": 0.80,
+            },
+        }
     },
     "final_evaluation": {
         "quality_score": 0.88,
         "is_coherent": True,
-        "assessment": "..."
+        "assessment": "...",
     },
     "iteration_counts": {
-        "analyzer": 1,
-        "generator": 2,
-        "assessor": 1,
-        "verifier": 1
-    }
+        "worker": 1,
+    },
 }
 ```
 
@@ -173,57 +162,30 @@ response.metadata["orchestration"]["react_evaluation"] = None
 
 ### Use **Enabled** (ReAct On) When:
 
-- ✅ Processing critical incidents where quality is paramount
-- ✅ You need transparency into decision-making
-- ✅ Cost is not a major constraint
-- ✅ Execution time is not critical
-- ✅ Detailed evaluation metadata is needed
-
-**Examples:**
-- Production incident resolution
-- Security incident triage
-- High-impact decision-making
-- Regulatory/compliance scenarios
+- Critical or high-stakes work needs stronger validation
+- You want explicit quality metadata
+- Cost and latency are acceptable
 
 ### Use **Disabled** (ReAct Off) When:
 
-- ✅ You need fast turnaround
-- ✅ Cost optimization is critical
-- ✅ Low-stakes decisions
-- ✅ Real-time requirements
-- ✅ High-volume processing
-
-**Examples:**
-- Routine operational queries
-- Bulk incident categorization
-- Pre-filtering before detailed analysis
-- Quick triage before escalation
+- You need fast, cheap execution
+- The orchestration is straightforward and deterministic enough without refinement
+- The response quality threshold is intentionally relaxed
 
 ---
 
 ## Example: Hybrid Approach
 
 ```python
-from BasePackage.AgentConfig import AgentConfig
-from IncResolverAgent import IRRAgent
+agent.enable_react_evaluation = False
+quick_response = agent.run("Quick triage request")
 
-irr_agent = IRRAgent(AgentConfig(name="hybrid"))
-irr_agent.setup_child_agents()
-irr_agent.initialize()
-
-# Stage 1: Quick triage with ReAct disabled
-irr_agent.enable_react_evaluation = False
-quick_response = irr_agent.run(incident_description)
-
-# Determine severity/impact...
-if is_critical:
-    # Stage 2: Detailed analysis with ReAct enabled
-    irr_agent.enable_react_evaluation = True
-    detailed_response = irr_agent.run(incident_description)
-    # Use detailed_response with quality metrics
+if needs_deeper_review:
+    agent.enable_react_evaluation = True
+    detailed_response = agent.run("Critical review request")
+    print(detailed_response.metadata["orchestration"]["react_evaluation"])
 else:
-    # Use quick_response for non-critical
-    pass
+    print(quick_response.content)
 ```
 
 ---
@@ -240,18 +202,19 @@ else:
 
 **Getter:**
 ```python
-is_enabled = agent.enable_react_evaluation  # Returns bool
+is_enabled = agent.enable_react_evaluation
 ```
 
 **Setter:**
 ```python
-agent.enable_react_evaluation = True   # Enable ReAct
-agent.enable_react_evaluation = False  # Disable ReAct
+agent.enable_react_evaluation = True
+agent.enable_react_evaluation = False
 
-# Any truthy/falsy value is converted to bool
-agent.enable_react_evaluation = 1      # Converted to True
-agent.enable_react_evaluation = 0      # Converted to False
+agent.enable_react_evaluation = 1
+agent.enable_react_evaluation = 0
 ```
+
+The setter normalizes all truthy/falsy values to `bool`.
 
 ---
 
@@ -259,62 +222,9 @@ agent.enable_react_evaluation = 0      # Converted to False
 
 | Setting | Default | Effect |
 |---------|---------|--------|
-| `enable_react_evaluation` | `True` | Toggle entire ReAct loop |
-| `MAX_ITERATIONS_PER_CHILD` | `2` | Max refinement iterations (when enabled) |
-| `CONFIDENCE_THRESHOLD` | `0.75` | Quality threshold for refinement (when enabled) |
-
----
-
-## Code Examples
-
-### Example 1: Conditional Toggle Based on Incident Severity
-
-```python
-def resolve_incident(irr_agent, incident):
-    severity = extract_severity(incident)
-    
-    if severity == "critical":
-        irr_agent.enable_react_evaluation = True
-        print("Running with full quality assurance (ReAct enabled)")
-    else:
-        irr_agent.enable_react_evaluation = False
-        print("Running in fast mode (ReAct disabled)")
-    
-    return irr_agent.run(incident)
-```
-
-### Example 2: A/B Testing
-
-```python
-# Get same incident with both modes
-irr_agent.enable_react_evaluation = True
-response_with_react = irr_agent.run(incident)
-quality_with_react = response_with_react.metadata["orchestration"]["react_evaluation"]["final_evaluation"]["quality_score"]
-
-irr_agent.enable_react_evaluation = False
-response_without_react = irr_agent.run(incident)
-
-print(f"With ReAct: {quality_with_react:.2f}")
-print(f"Without ReAct: No quality metrics")
-print(f"Time saved: Estimated 40-50 seconds")
-```
-
-### Example 3: Adaptive Mode
-
-```python
-class AdaptiveIRRAgent(IRRAgent):
-    def run(self, user_input: str, quality_required=False):
-        self.enable_react_evaluation = quality_required
-        return super().run(user_input)
-
-# Usage
-agent = AdaptiveIRRAgent(config)
-agent.setup_child_agents()
-agent.initialize()
-
-quick_response = agent.run(incident, quality_required=False)
-quality_response = agent.run(incident, quality_required=True)
-```
+| `enable_react_evaluation` | `True` | Toggle the ReAct loop |
+| `MAX_ITERATIONS_PER_CHILD` | `2` | Maximum refinement iterations per child |
+| `CONFIDENCE_THRESHOLD` | `0.75` | Minimum score before a response is refined |
 
 ---
 
@@ -323,5 +233,4 @@ quality_response = agent.run(incident, quality_required=True)
 - [OrchestratorMixin.md](./OrchestratorMixin.md) - Shared orchestration contract and common implementations
 - [MasterAgent.md](./MasterAgent.md) - Sequential orchestration behavior
 - [MasterAgentLanggraph.md](./MasterAgentLanggraph.md) - Graph orchestration behavior
-- [IRRAgent.md](../IncResolverAgent/IRRAgent.md) - IRRAgent documentation
 - [BaseAgent.md](./BaseAgent.md) - Base agent implementation
