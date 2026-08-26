@@ -12,7 +12,7 @@ class OrchestratorAPIRequest(BaseModel):
     """Validated request body for invoking an orchestrator over HTTP."""
 
     model_config = ConfigDict(extra="forbid")
-
+    # Some sample comment added to test the code generation capabilities of the model.
     input: str = Field(..., min_length=1)
     routing_mode: Literal["keyword", "llm"] | None = None
     enable_react_evaluation: bool | None = None
