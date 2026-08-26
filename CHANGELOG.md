@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/sandeep-acharya11/AgentBase/compare/v0.1.0...v1.0.0) (2026-08-26)
+
+
+### Features
+
+* Release as major version ([583b9d2](https://github.com/sandeep-acharya11/AgentBase/commit/583b9d26b9103490f76b37edfcd92c5ace012562))
+
 ## 0.1.0 (2026-08-26)
 
 

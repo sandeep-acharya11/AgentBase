@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "BasePackage"
-version = "0.1.0"
+version = "1.0.0"
 description = "Base agent framework (BaseAgent, MasterAgent, MCP client, orchestration mixin)"
 readme = { text = "Base agent framework package.", content-type = "text/plain" }
 requires-python = ">=3.10"
