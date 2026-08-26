@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "BasePackage"
+version = "0.1.0"
+description = "Base agent framework (BaseAgent, MasterAgent, MCP client, orchestration mixin)"
+readme = { text = "Base agent framework package.", content-type = "text/plain" }
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.2",
+    "langgraph>=0.2",
+    "typing_extensions>=4.9",
+    "mcp>=1.0",
+]
+
+[tool.setuptools]
+packages = ["BasePackage"]
