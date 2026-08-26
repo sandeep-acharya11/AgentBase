@@ -13,7 +13,6 @@ class OrchestratorAPIRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     # Some sample comment added to test the code generation capabilities of the model.
-    # Adding some more comments to see how the model handles them. This is a test comment.
     input: str = Field(..., min_length=1)
     routing_mode: Literal["keyword", "llm"] | None = None
     enable_react_evaluation: bool | None = None
