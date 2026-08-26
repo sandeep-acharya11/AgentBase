@@ -143,15 +143,47 @@ print(response)
 Building a multi-agent orchestrator with `MasterAgent`:
 
 ```python
-from BasePackage import AgentConfig, MasterAgent
+from BasePackage import AgentConfig, BaseAgent, MasterAgent
+from langchain_core.tools import BaseTool
+
+
+class PlanningChildAgent(BaseAgent):
+    def build_tools(self) -> list[BaseTool]:
+        return []
+
+    def build_system_prompt(self) -> str:
+        return "You are a planning specialist. Break tasks into ordered steps."
+
+
+class ReasoningChildAgent(BaseAgent):
+    def build_tools(self) -> list[BaseTool]:
+        return []
+
+    def build_system_prompt(self) -> str:
+        return "You are a reasoning specialist. Explain tradeoffs and conclusions clearly."
+
 
 master_config = AgentConfig(
     name="master-agent",
     description="Master agent orchestrating planner and reasoner child agents",
 )
 master_agent = MasterAgent(master_config)
-master_agent.register_child(planner_agent)
-master_agent.register_child(reasoner_agent)
+
+planner_agent = PlanningChildAgent(
+    AgentConfig(
+        name="planning-child-agent",
+        description="Child agent for decomposition and planning",
+    )
+)
+reasoner_agent = ReasoningChildAgent(
+    AgentConfig(
+        name="reasoning-child-agent",
+        description="Child agent for reasoning and explanations",
+    )
+)
+
+master_agent.add_child("planner", planner_agent, keywords=["plan", "steps", "roadmap"])
+master_agent.add_child("reasoner", reasoner_agent, keywords=["why", "explain", "reason"], set_default=True)
 
 result = master_agent.run("Plan and reason through this task")
 ```
