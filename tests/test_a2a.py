@@ -72,3 +72,24 @@ def test_mount_a2a_routes_serves_card_and_completes_task() -> None:
     task = payload["result"]["task"]
     assert task["status"]["state"] == "TASK_STATE_COMPLETED"
     assert task["artifacts"][0]["parts"][0]["text"] == "Echo: hello"
+
+
+def test_orchestrator_create_api_app_includes_a2a_by_default() -> None:
+    from BasePackage.MasterAgent import MasterAgent
+
+    class DummyMasterAgent(MasterAgent):
+        def setup_child_agents(self) -> None:
+            pass
+
+    agent = DummyMasterAgent(AgentConfig(name="test-master", description="Test master agent"))
+    app = agent.create_api_app(prefix="/api/test")
+    client = TestClient(app)
+
+    card_response = client.get("/.well-known/agent-card.json")
+    assert card_response.status_code == 200
+    card = card_response.json()
+    assert card["name"] == "test-master"
+    assert card["supportedInterfaces"][0]["url"] == "http://127.0.0.1:8000/a2a"
+
+    health_response = client.get("/api/test/health")
+    assert health_response.status_code == 200
