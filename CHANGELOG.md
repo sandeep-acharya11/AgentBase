@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/sandeep-acharya11/AgentBase/compare/v1.0.0...v1.1.0) (2026-08-29)
+
+
+### Features
+
+* A2A functionalities and documentations added ([00be055](https://github.com/sandeep-acharya11/AgentBase/commit/00be05547dc9462e9226ef03c9162c4e67c902af))
+
 ## [1.0.0](https://github.com/sandeep-acharya11/AgentBase/compare/v0.1.0...v1.0.0) (2026-08-26)
 
 
