@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import re
 import threading
 from abc import ABC, abstractmethod
@@ -30,6 +31,7 @@ from BasePackage.ApiModels import (
 )
 
 if TYPE_CHECKING:
+    from BasePackage.A2A import A2AAgentSkill
     from BasePackage.AgentResponse import AgentResponse
     from BasePackage.BaseAgent import BaseAgent
     from fastapi import APIRouter, FastAPI
@@ -858,8 +860,12 @@ class OrchestratorMixin(ABC):
         include_health: bool = True,
         enable_cors: bool = True,
         cors_options: dict[str, object] | None = None,
+        enable_a2a: bool = True,
+        a2a_public_url: str | None = None,
+        a2a_skills: list[A2AAgentSkill] | None = None,
     ) -> FastAPI:
         from fastapi import FastAPI
+        from BasePackage.A2A import A2AAgentConfig, A2AAgentSkill, mount_a2a_routes
 
         app = FastAPI(
             title=title or f"{self.name} API",
@@ -878,6 +884,29 @@ class OrchestratorMixin(ABC):
             enable_cors=enable_cors,
             cors_options=cors_options,
         )
+
+        if enable_a2a:
+            public_url = a2a_public_url or os.getenv(
+                "AGENT_A2A_PUBLIC_URL", "http://127.0.0.1:8000"
+            )
+            skills = a2a_skills or [
+                A2AAgentSkill(
+                    id=f"{self.name}-orchestrator-skill",
+                    name=self.name.replace("-", " ").title(),
+                    description=self.description or f"A2A interface for {self.name}",
+                    tags=getattr(self.config, "tags", []) or ["orchestrator"],
+                )
+            ]
+            mount_a2a_routes(
+                app,
+                self,  # type: ignore[arg-type]
+                A2AAgentConfig(
+                    public_url=public_url,
+                    version=version,
+                    skills=skills,
+                ),
+            )
+
         return app
 
     # ------------------------------------------------------------------

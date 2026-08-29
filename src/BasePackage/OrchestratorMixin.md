@@ -166,7 +166,7 @@ but does not implement the concrete sequential or graph execution loop.
 - _run_api_request_stream(request: OrchestratorAPIRequest)
 - build_health_response() -> OrchestratorHealthResponse
 - create_api_router(prefix="", tags=None, include_health=True) -> APIRouter
-- create_api_app(..., prefix="/api/agent", tags=None, include_health=True, enable_cors=True, cors_options=None) -> FastAPI
+- create_api_app(..., prefix="/api/agent", tags=None, include_health=True, enable_cors=True, cors_options=None, enable_a2a=True, a2a_public_url=None, a2a_skills=None) -> FastAPI
 
 Behavior summary:
 - Lazily wires child agents by calling setup_child_agents() when needed.
@@ -175,6 +175,9 @@ Behavior summary:
     isolated between requests.
 - Supports per-request routing_mode override (keyword or llm).
 - Supports per-request enable_react_evaluation override.
+- Automatically mounts A2A (Agent-to-Agent) endpoints (`GET /.well-known/agent-card.json` and `POST /a2a`) by default (`enable_a2a=True`).
+- Resolves public A2A URL from `a2a_public_url` or `AGENT_A2A_PUBLIC_URL` (defaults to `http://127.0.0.1:8000`).
+- Derives A2A skills automatically from orchestrator metadata or custom `a2a_skills`.
 - Executes run() via run_in_threadpool so sync orchestrators work in async FastAPI routes.
 - Returns typed response payloads via OrchestratorAPIResponse.
 - Exposes both synchronous POST /run and Server-Sent Events POST /stream routes.

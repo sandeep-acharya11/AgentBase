@@ -2,7 +2,7 @@
 
 This document explains how the A2A (Agent-to-Agent) support in this project has been implemented, how it integrates with `BaseAgent`, and how to use it from both the server and client sides.
 
-The implementation lives in [src/BasePackage/A2A.py](A2A.py) and is exported through [src/BasePackage/__init__.py](__init__.py).
+The implementation lives in [src/BasePackage/A2A.py](src/BasePackage/A2A.py) and is exported through [src/BasePackage/__init__.py](src/BasePackage/__init__.py).
 
 ## What A2A support provides
 
@@ -17,16 +17,16 @@ The package exposes a `BaseAgent` as an A2A-compatible service over FastAPI and 
 ## High-level architecture
 
 ```mermaid
-flowchart LR
-    Client[Client / another agent] -->|POST /a2a JSON-RPC| FastAPI[FastAPI app]
-    FastAPI -->|route| Handler[DefaultRequestHandler]
-    Handler --> Executor[BaseAgentA2AExecutor]
-    Executor --> Agent[BaseAgent subclass]
-    Agent -->|run(user_input)| Response[AgentResponse]
-    Executor -->|artifact + task status| Handler
-    Handler -->|JSON-RPC response| Client
-
-    FastAPI -->|GET /.well-known/agent-card.json| Card[Agent Card metadata]
+flowchart TD
+    Client["Client / Remote Agent"] -->|"POST /a2a (JSON-RPC)"| FastAPI["FastAPI App"]
+    FastAPI -->|"Route /a2a"| Handler["DefaultRequestHandler"]
+    FastAPI -->|"GET /.well-known/agent-card.json"| CardRoutes["Agent Card Route"]
+    CardRoutes -->|"Return AgentCard"| Client
+    Handler --> Executor["BaseAgentA2AExecutor"]
+    Executor -->|"asyncio.to_thread(agent.run)"| Agent["BaseAgent / Orchestrator"]
+    Agent -->|"AgentResponse"| Executor
+    Executor -->|"Artifact & Task Status"| Handler
+    Handler -->|"JSON-RPC Response"| Client
 ```
 
 ## Key components
@@ -165,6 +165,87 @@ The typical endpoints become:
 
 - `GET /.well-known/agent-card.json`
 - `POST /a2a`
+
+## Common Implementation: Automated A2A in Orchestrators (`create_api_app`)
+
+While `mount_a2a_routes()` provides low-level, manual route mounting for any `BaseAgent`, the common pattern for deploying services in this framework is via `OrchestratorMixin.create_api_app()`.
+
+All orchestrator classes (`MasterAgent`, `MasterAgentLanggraph`) inherit from `OrchestratorMixin`, and `create_api_app()` now provides **built-in, automatic A2A support enabled by default**.
+
+### Method Signature
+
+```python
+def create_api_app(
+    self,
+    title: str | None = None,
+    description: str | None = None,
+    version: str = "1.0.0",
+    prefix: str = "/api/agent",
+    tags: list[str] | None = None,
+    include_health: bool = True,
+    enable_cors: bool = True,
+    cors_options: dict[str, object] | None = None,
+    enable_a2a: bool = True,
+    a2a_public_url: str | None = None,
+    a2a_skills: list[A2AAgentSkill] | None = None,
+) -> FastAPI:
+```
+
+### How it Works
+
+When `enable_a2a=True` (default):
+1. **Public URL Resolution**: Resolves the agent's public URL from `a2a_public_url`, or the `AGENT_A2A_PUBLIC_URL` environment variable, falling back to `http://127.0.0.1:8000`.
+2. **Skill Synthesis**: Automatically derives `A2AAgentSkill` from the orchestrator's `name`, `description`, and `config.tags` if custom skills are not provided.
+3. **Route Mounting**: Calls `mount_a2a_routes(app, self, A2AAgentConfig(...))` automatically alongside REST (`POST /run`), streaming (`POST /stream`), and health (`GET /health`) routes.
+
+### Architectural Unified Gateway Diagram
+
+```mermaid
+flowchart TD
+    subgraph UnifiedApp["FastAPI Application (Single Port / Process)"]
+        subgraph REST["REST & SSE Surface"]
+            RunEndpoint["POST /api/agent/run"]
+            StreamEndpoint["POST /api/agent/stream"]
+            HealthEndpoint["GET /api/agent/health"]
+        end
+        subgraph A2A["A2A Protocol Surface"]
+            CardEndpoint["GET /.well-known/agent-card.json"]
+            RPCEndpoint["POST /a2a"]
+        end
+        Orchestrator["MasterAgent / MasterAgentLanggraph (OrchestratorMixin)"]
+    end
+
+    WebClient["Web UI / Frontend"] -->|"POST /run or /stream"| REST
+    REST --> Orchestrator
+    RemoteAgent["Remote A2A Agent"] -->|"GET /.well-known/agent-card.json"| CardEndpoint
+    RemoteAgent -->|"POST /a2a (JSON-RPC)"| RPCEndpoint
+    RPCEndpoint --> Orchestrator
+```
+
+### Reasons Behind Doing So
+
+1. **Zero-Boilerplate Service Publishing**
+   - In multi-agent architectures, orchestrators are the primary entry points exposed as services.
+   - Requiring developers to manually configure `A2AAgentConfig`, extract skills, and call `mount_a2a_routes()` on every application created unnecessary boilerplate and inconsistency across services.
+
+2. **Unified API Gateway (Dual-Interface on a Single Port)**
+   - Instead of managing separate server instances or ports for REST clients and A2A peer agents, a single FastAPI app seamlessly handles:
+     - Standard REST requests (`/run`)
+     - Real-time Server-Sent Events (`/stream`)
+     - Health checks (`/health`)
+     - A2A Agent Card discovery (`/.well-known/agent-card.json`)
+     - A2A JSON-RPC execution (`/a2a`)
+
+3. **Metadata Consistency & Single Source of Truth**
+   - Automatically populates the `AgentCard` and `A2AAgentSkill` descriptors from the agent's existing metadata (`agent.name`, `agent.description`, `agent.config.tags`).
+   - Prevents metadata drift between OpenAPI documentation and A2A service cards.
+
+4. **Environment-Driven Configuration for Deployments**
+   - In containerized and cloud environments (Docker, Kubernetes, reverse proxies), public hostnames and external ports vary across environments.
+   - By reading `AGENT_A2A_PUBLIC_URL`, infrastructure configurations can set the advertised public endpoint without code changes.
+
+5. **Configurability with Graceful Opt-Out**
+   - While enabled by default to encourage agent interoperability, callers can pass custom skills via `a2a_skills` or disable A2A entirely with `enable_a2a=False` if only pure REST endpoints are desired.
 
 ## How requests are processed
 
@@ -328,12 +409,58 @@ def invoke_sync(self, user_input: str) -> str:
 
 This is useful when calling from a tool, script, or synchronous LangChain function.
 
-## Example: exposing a custom agent via A2A
+## Example 1: Exposing an Orchestrator via `create_api_app` (Common Pattern)
+
+For orchestrators (`MasterAgent`, `MasterAgentLanggraph`), A2A routes and the Agent Card are mounted automatically when calling `create_api_app()`.
+
+```python
+from BasePackage import AgentConfig, MasterAgent, BaseAgent
+
+
+class AnalysisAgent(MasterAgent):
+    def setup_child_agents(self) -> None:
+        # Register specialist child agents here
+        pass
+
+
+agent = AnalysisAgent(
+    AgentConfig(
+        name="analysis-master",
+        description="Master orchestrator for multi-agent data analysis.",
+        tags=["analysis", "orchestrator"],
+    )
+)
+
+# A2A is enabled by default with public URL fallback to http://127.0.0.1:8000
+# or via AGENT_A2A_PUBLIC_URL env variable
+app = agent.create_api_app(
+    prefix="/api/analysis",
+    a2a_public_url="https://api.myorg.com",
+)
+```
+
+This single app exposes:
+- `POST /api/analysis/run` (REST synchronous execution)
+- `POST /api/analysis/stream` (SSE real-time streaming execution)
+- `GET /api/analysis/health` (Health check)
+- `GET /.well-known/agent-card.json` (A2A Agent Card discovery)
+- `POST /a2a` (A2A JSON-RPC interface)
+
+## Example 2: Exposing a Standalone `BaseAgent` Manually
+
+If you have a standalone `BaseAgent` and want to mount A2A routes manually onto an existing FastAPI app:
 
 ```python
 from fastapi import FastAPI
 
-from BasePackage import AgentConfig, AgentResponse, BaseAgent, A2AAgentConfig, A2AAgentSkill, mount_a2a_routes
+from BasePackage import (
+    AgentConfig,
+    AgentResponse,
+    BaseAgent,
+    A2AAgentConfig,
+    A2AAgentSkill,
+    mount_a2a_routes,
+)
 
 
 class EchoAgent(BaseAgent):
