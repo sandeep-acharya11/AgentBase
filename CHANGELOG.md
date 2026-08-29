@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/sandeep-acharya11/AgentBase/compare/v1.1.0...v1.2.0) (2026-08-29)
+
+
+### Features
+
+* A2A agent card and discivery added to default base class ([7cd20e7](https://github.com/sandeep-acharya11/AgentBase/commit/7cd20e7e71fb87506a59d70db3f5129d4bc7db9f))
+
 ## [1.1.0](https://github.com/sandeep-acharya11/AgentBase/compare/v1.0.0...v1.1.0) (2026-08-29)
 
 
