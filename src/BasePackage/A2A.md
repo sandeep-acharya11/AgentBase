@@ -253,6 +253,40 @@ flowchart TD
 
 This class adapts the `BaseAgent.run()` contract to the A2A execution lifecycle.
 
+### A2A request-to-agent execution flow
+
+```mermaid
+sequenceDiagram
+    participant Client as A2A Client / Remote Agent
+    participant Route as POST /a2a JSON-RPC Route
+    participant Handler as DefaultRequestHandler
+    participant Executor as BaseAgentA2AExecutor
+    participant Queue as EventQueue / TaskUpdater
+    participant Agent as BaseAgent
+
+    Client->>Route: SendMessage(text)
+    Route->>Handler: Dispatch A2A request
+    Handler->>Executor: execute(context, event_queue)
+    Executor->>Executor: Extract and validate user input, task ID, and context ID
+    Executor->>Queue: Enqueue TASK_STATE_SUBMITTED
+    Executor->>Queue: start_work() -> TASK_STATE_WORKING
+    Executor->>Agent: asyncio.to_thread(agent.run, user_input)
+    Agent-->>Executor: AgentResponse(content)
+
+    alt Agent run succeeds
+        Executor->>Queue: add_artifact(Part(text=content))
+        Executor->>Queue: complete(final agent message)
+        Queue-->>Handler: TASK_STATE_COMPLETED with artifact
+        Handler-->>Route: JSON-RPC task response
+        Route-->>Client: Completed task and response text
+    else Agent run raises an exception
+        Executor->>Queue: failed("Agent execution failed.")
+        Queue-->>Handler: TASK_STATE_FAILED
+        Handler-->>Route: JSON-RPC failed task response
+        Route-->>Client: Failed task
+    end
+```
+
 ```python
 class BaseAgentA2AExecutor(AgentExecutor):
     def __init__(self, agent: BaseAgent) -> None:
