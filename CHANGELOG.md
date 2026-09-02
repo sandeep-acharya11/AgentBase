@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/sandeep-acharya11/AgentBase/compare/v1.2.0...v1.3.0) (2026-09-02)
+
+
+### Features
+
+* Ollama compatibility done ([310b03c](https://github.com/sandeep-acharya11/AgentBase/commit/310b03c62caff7dce6311cc7691f1bd1f74c9ad1))
+
 ## [1.2.0](https://github.com/sandeep-acharya11/AgentBase/compare/v1.1.0...v1.2.0) (2026-08-29)
 
 
