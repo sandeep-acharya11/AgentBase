@@ -196,11 +196,67 @@ For a full runnable example, see [`src/BasePackage/MultiAgentMain.py`](src/BaseP
 
 ## Environment Configuration
 
-`BasePackage` relies on `python-dotenv` and `langchain-openai`, so make sure your consuming project provides the necessary environment variables (e.g. `OPENAI_API_KEY`) via a `.env` file or your shell environment:
+`BasePackage` loads `.env` during agent initialization. Select the model provider and
+model with `AGENT_MODEL_PROVIDER` and `AGENT_MODEL_NAME`; values passed in
+`AgentConfig` remain the fallback defaults.
+
+### OpenAI
+
+For OpenAI (the default), add the following to `.env` or set the value in your shell:
 
 ```powershell
 $env:OPENAI_API_KEY = "sk-..."
 ```
+
+### Ollama (local)
+
+Ollama is supported through its OpenAI-compatible API, so no additional Python SDK is
+needed. Follow these steps to run the included multi-agent example against a local
+model:
+
+1. Install [Ollama](https://ollama.com/) and make sure its server is running. When
+    using the command-line server directly, run `ollama serve` in a separate terminal.
+2. Pull a chat model:
+
+    ```powershell
+    ollama pull llama3.2:3b
+    ```
+
+3. Copy the environment template and configure the local model:
+
+    ```powershell
+    Copy-Item .env.example .env
+    ```
+
+    Update `.env` with:
+
+    ```dotenv
+    AGENT_MODEL_PROVIDER=ollama
+    AGENT_MODEL_NAME=llama3.2:3b
+    ```
+
+4. Run the included example:
+
+    ```powershell
+    .venv\Scripts\python.exe -m BasePackage.MultiAgentMain --routing-mode keyword
+    ```
+
+    Enter a request such as `Explain the tradeoffs between PostgreSQL and SQLite`, then
+    type `exit` to end the interactive session.
+
+`OLLAMA_BASE_URL` defaults to `http://127.0.0.1:11434/v1` and `OLLAMA_API_KEY`
+defaults to `ollama`, so only the provider and model are required for a standard local
+Ollama installation. Use these variables in `.env` to override the defaults or connect
+to a hosted Ollama-compatible endpoint:
+
+```dotenv
+OLLAMA_BASE_URL=http://127.0.0.1:11434/v1
+# Required by the OpenAI-compatible client; not validated by local Ollama.
+OLLAMA_API_KEY=ollama
+```
+
+The default model factory supports `openai` and `ollama`. For another provider, override
+`BaseAgent.default_model()` with a compatible LangChain runnable.
 
 ## Dependencies
 

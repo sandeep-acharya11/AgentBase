@@ -33,7 +33,7 @@ Why it is written this way:
 Key fields:
 - `name`: required, non-empty identifier.
 - `description`: optional descriptive text.
-- `model_provider`: currently expected value is `"openai"` in default path.
+- `model_provider`: default provider fallback (`"openai"` or `"ollama"`).
 - `model_name`, `temperature`, `max_tokens`: model behavior.
 - `system_prompt`: base instruction text.
 - `tags`, `verbose`: metadata/flags for caller use.
@@ -464,8 +464,26 @@ class CustomModelAgent(MyAgent):
     return build_my_chat_model()
 ```
 
-The default `default_model()` supports only `model_provider="openai"`; an unsupported
-provider raises `ValueError` unless this method is overridden.
+The default `default_model()` supports OpenAI and Ollama. At initialization, `.env`
+values override the corresponding `AgentConfig` provider and model values:
+
+```dotenv
+# OpenAI (default)
+AGENT_MODEL_PROVIDER=openai
+AGENT_MODEL_NAME=gpt-4o-mini
+OPENAI_API_KEY=sk-...
+
+# Local Ollama, using its OpenAI-compatible API
+AGENT_MODEL_PROVIDER=ollama
+AGENT_MODEL_NAME=llama3.2:3b
+OLLAMA_BASE_URL=http://127.0.0.1:11434/v1
+OLLAMA_API_KEY=ollama
+```
+
+For Ollama, `OLLAMA_BASE_URL` defaults to `http://127.0.0.1:11434/v1` and
+`OLLAMA_API_KEY` defaults to `ollama`. The placeholder key is needed by the
+OpenAI-compatible client but is not validated by a standard local Ollama server.
+An unsupported provider raises `ValueError` unless this method is overridden.
 
 ### 4) Custom `run` override (when special orchestration is needed)
 
