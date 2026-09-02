@@ -3,6 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from datetime import datetime, timezone
+import os
 from typing import Any, Sequence
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool as tool_decorator
@@ -121,17 +122,30 @@ class BaseAgent(ABC):
 
     def default_model(self) -> ChatOpenAI | RunnableSerializable[Any, Any]:
         """Build a default chat model based on the configured provider."""
-        if self.config.model_provider.lower() != "openai":
+        model_provider = os.getenv("AGENT_MODEL_PROVIDER", self.config.model_provider).lower()
+        model_name = os.getenv("AGENT_MODEL_NAME", self.config.model_name)
+
+        if model_provider == "openai":
+            model = ChatOpenAI(
+                model=model_name,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                api_key=os.getenv("OPENAI_API_KEY"),
+            )
+        elif model_provider == "ollama":
+            model = ChatOpenAI(
+                model=model_name,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                base_url=os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1"),
+                api_key=os.getenv("OLLAMA_API_KEY", "ollama"),
+            )
+        else:
             raise ValueError(
-                "Only 'openai' provider is supported in this scaffold. "
-                "Override default_model() to add other providers."
+                f"Unsupported model provider: {model_provider!r}. "
+                "Supported providers are 'openai' and 'ollama'."
             )
 
-        model = ChatOpenAI(
-            model=self.config.model_name,
-            temperature=self.config.temperature,
-            max_tokens=self.config.max_tokens,
-        )
         if self.tools:
             return model.bind_tools(self.tools)
         return model
